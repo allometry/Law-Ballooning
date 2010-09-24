@@ -6,10 +6,14 @@ import java.awt.Image;
 import java.awt.RenderingHints;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.ImageObserver;
+import java.net.URL;
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+
+import javax.imageio.ImageIO;
 
 import org.rsbot.event.events.ServerMessageEvent;
 import org.rsbot.event.listeners.PaintListener;
@@ -32,15 +36,24 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 	private int ringDuellingCharges = 0;
 	private int lawRunesCrafted = 0, lawRunesAlreadyCounted = 0;
 	private long timeoutMillis;
+	private long startingTime = 0;
 	
 	//Flags
 	private boolean isVerbose = true;
+	private boolean isScriptLoaded = false;
 	
 	//Formatters
 	private NumberFormat numberFormatter = NumberFormat.getNumberInstance(Locale.US);
 	
 	//Images
+	private Image cursorImage;
+	private Image lawRuneImage, tagOrange, sumImage;
+	private Image timeImage, lawRuneToGoImage;
+	private Image coinsImage, coinsDeleteImage, coinsAddImage;
+	private Image arrowRotateClockwise;
 	
+	//Image Observers
+	private ImageObserver observer;
 	
 	//Interface IDs
 	private int ballonTravelMapParentID = 469;
@@ -67,22 +80,24 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 	private int mysteriousRuinsID = 2459;
 	
 	//Paths
-	private RSTile[] cwlbPath = {new RSTile(2444, 3083), new RSTile(2444, 3087), new RSTile(2447, 3089), new RSTile(2452, 3089), new RSTile(2458, 3090), new RSTile(2460, 3095), new RSTile(2458, 3100), new RSTile(2458, 3105), new RSTile(2462, 3107)};
-	private RSTile[] lbmrPath = {new RSTile(2808, 3354), new RSTile(2811, 3350), new RSTile(2818, 3344), new RSTile(2826, 3344), new RSTile(2832, 3344), new RSTile(2837, 3345), new RSTile(2842, 3348), new RSTile(2847, 3348), new RSTile(2852, 3348), new RSTile(2858, 3348), new RSTile(2859, 3354), new RSTile(2858, 3359), new RSTile(2858, 3365), new RSTile(2858, 3371), new RSTile(2858, 3376), new RSTile(2858, 3379), new RSTile(2858, 3382)};
-	private RSTile[] mrlaPath = {new RSTile(2464, 4819), new RSTile(2464, 4822), new RSTile(2464, 4825), new RSTile(2464, 4830), new RSTile(2464, 4834)};
+	private RSTile[] cwlbPath = {new RSTile(2444, 3083), new RSTile(2444, 3087), new RSTile(2448, 3089), new RSTile(2454, 3089), new RSTile(2458, 3092), new RSTile(2458, 3097), new RSTile(2458, 3102), new RSTile(2458, 3107), new RSTile(2462, 3108)};
+	private RSTile[] lbmrPath = {new RSTile(2808, 3354), new RSTile(2813, 3350), new RSTile(2819, 3344), new RSTile(2824, 3344), new RSTile(2829, 3343), new RSTile(2835, 3343), new RSTile(2838, 3347), new RSTile(2844, 3348), new RSTile(2850, 3348), new RSTile(2855, 3348), new RSTile(2859, 3351), new RSTile(2857, 3356), new RSTile(2857, 3361), new RSTile(2857, 3367), new RSTile(2857, 3372), new RSTile(2857, 3376), new RSTile(2858, 3379)};
+	private RSTile[] mrlaPath = {new RSTile(2464, 4819), new RSTile(2464, 4824), new RSTile(2464, 4828), new RSTile(2464, 4830)};
 	
 	//Scoreboard
-	private Scoreboard topLeftScoreboard, topRightScoreboard, bottomLeftScoreboard;
+	private Scoreboard topLeftScoreboard, topRightScoreboard, bottomLeftScoreboard, bottomRightScoreboard;
 	
 	//Scoreboard Widgets
-	private ScoreboardWidget runesCrafted, currentGrossProduct, currentGrossCost, currentNetProduct;
-	private ScoreboardWidget currentRuntime, runesToLevel, runesToGo;
-	private ScoreboardWidget currentLevel, currentExperience, experiencedGained;
+	private ScoreboardWidget runesCrafted, currentNetProduct;
+	private ScoreboardWidget currentRuntime, currentLevel, runesToLevel, experiencedGained;
+	private ScoreboardWidget currentGrossProduct, currentGrossCost;
+	private ScoreboardWidget status;
 	
-	//private Image lawRuneImage, coinsImage, coinsAddImage, coinsDeleteImage;
-	//private Image timeImage, lawRuneToGoImage
-	
-	//private Image coinsImage, cursorImage, ringImage, ringGoImage, stopImage, sumImage, timeImage;
+	//Scoreboard Widget Indexes
+	private int runesCraftedIndex, currentNetProductIndex;
+	private int currentRuntimeIndex, currentLevelIndex, runesToLevelIndex, experiencedGainedIndex;
+	private int currentGrossProductIndex, currentGrossCostIndex;
+	private int statusIndex;
 	
 	//States
 	private enum State {
@@ -106,6 +121,7 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 		getHastledByAssistant,
 		getSearchedByAssistant,
 		travelToEntrana,
+		walkToMysteriousTile,
 		walkToRuins,
 		enterRuins,
 		walkToAlter,
@@ -121,15 +137,111 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 	private String lawRuneAlterAction = "Craft";
 	private String mysteriousRuinsAction = "Enter Mysterious ruins";
 	
+	//String Maps
+	private HashMap<String, String> stateConversion = new HashMap<String, String>();
+	
 	//Tiles
-	private RSTile alterTile = new RSTile(2464, 4834);
+	private RSTile alterTile = new RSTile(2464, 4831);
 	private RSTile bankChestTile = new RSTile(2443, 3083);
-	private RSTile mysteriousRuinsTile = new RSTile(2858, 3382);
+	private RSTile mysteriousRuinsTile = new RSTile(2858, 3379);
 	
 	@Override
 	public boolean onStart(Map<String,String> args) {
+		//Assemble String Map
+		stateConversion.put("setup", "Loading...");
+		stateConversion.put("broken", "Encountered a serious error!");
+		stateConversion.put("waiting", "Waiting for task to finish.");
+		stateConversion.put("resting", "Out of breath; resting...");
+		stateConversion.put("running", "Okay, we're ready to run again!");
+		stateConversion.put("walkToBank", "Walking to C.W. bank chest.");
+		stateConversion.put("openBank", "Opening C.W. bank chest.");
+		stateConversion.put("closeBank", "Closing C.W. bank chest.");
+		stateConversion.put("storeCraftedRunes", "Depositing Law Runes.");
+		stateConversion.put("retrieveRing", "Withdrawing Ring of Duelling.");
+		stateConversion.put("equipRing", "Equipping Ring of Duelling.");
+		stateConversion.put("retrieveNormalLog", "Withdrawing a Normal Log.");
+		stateConversion.put("retrieveRuneEssence", "Withdrawing Pure Rune Essence.");
+		stateConversion.put("fillPouches", "Filling Pouches.");
+		stateConversion.put("walkToBalloon", "Walking to C.W. balloon.");
+		stateConversion.put("walkToAssistant", "Walking to balloon assistant.");
+		stateConversion.put("talkToAssistant", "Trying to have a conversation...");
+		stateConversion.put("getHastledByAssistant", "Great, we're getting hastled!");
+		stateConversion.put("getSearchedByAssistant", "Fine, Search! What privacy?");
+		stateConversion.put("travelToEntrana", "And we're flying!");
+		stateConversion.put("walkToMysteriousTile", "Walking up to mysterious ruins.");
+		stateConversion.put("walkToRuins", "Walking to mysterious ruins.");
+		stateConversion.put("enterRuins", "Climbing down this mess.");
+		stateConversion.put("walkToAlter", "Walking up to crafting alter.");
+		stateConversion.put("craftRunes", "Craftin' some law runes.");
+		stateConversion.put("teleportToBank", "Teleporting to Castle Wars...");
+		
+		//Load Images
+		try {
+			cursorImage = ImageIO.read(new URL("http://scripts.allometry.com/app/webroot/img/cursors/cursor-01.png"));
+			lawRuneImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/information.png"));
+			coinsImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/coins.png"));
+			coinsDeleteImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/coins_delete.png"));
+			coinsAddImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/coins_add.png"));
+			timeImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/time.png"));
+			lawRuneToGoImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/information.png"));
+			tagOrange = ImageIO.read(new URL("http://scripts.allometry.com/icons/tag_orange.png"));
+			sumImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/sum.png"));
+			arrowRotateClockwise = ImageIO.read(new URL("http://scripts.allometry.com/icons/arrow_rotate_clockwise.png"));
+		} catch(Exception e) {}
+		
+		//Top Left Scoreboard
+		runesCrafted = new ScoreboardWidget(lawRuneImage, "");
+		currentNetProduct = new ScoreboardWidget(coinsAddImage, "");
+		
+		topLeftScoreboard = new Scoreboard(Scoreboard.TOP_LEFT, 128, 5);
+		topLeftScoreboard.addWidget(runesCrafted);
+		topLeftScoreboard.addWidget(currentNetProduct);
+		
+		runesCraftedIndex = 0;
+		currentNetProductIndex = 1;
+		
+		//Top Right Scoreboard
+		currentRuntime = new ScoreboardWidget(timeImage, "");
+		currentLevel = new ScoreboardWidget(tagOrange, "");
+		runesToLevel = new ScoreboardWidget(lawRuneToGoImage, "");
+		experiencedGained = new ScoreboardWidget(sumImage, "");
+		
+		topRightScoreboard = new Scoreboard(Scoreboard.TOP_RIGHT, 128, 5);
+		topRightScoreboard.addWidget(currentRuntime);
+		topRightScoreboard.addWidget(currentLevel);
+		topRightScoreboard.addWidget(runesToLevel);
+		topRightScoreboard.addWidget(experiencedGained);
+		
+		currentRuntimeIndex = 0;
+		currentLevelIndex = 1;
+		runesToLevelIndex = 2;
+		experiencedGainedIndex = 3;
+		
+		//Bottom Left Scoreboard
+		currentGrossProduct = new ScoreboardWidget(coinsImage, "");
+		currentGrossCost = new ScoreboardWidget(coinsDeleteImage, "");
+		
+		bottomLeftScoreboard = new Scoreboard(Scoreboard.BOTTOM_LEFT, 128, 5);
+		bottomLeftScoreboard.addWidget(currentGrossProduct);
+		bottomLeftScoreboard.addWidget(currentGrossCost);
+		
+		currentGrossProductIndex = 0;
+		currentGrossCostIndex = 1;
+		
+		//Bottom Right Scoreboard
+		status = new ScoreboardWidget(arrowRotateClockwise, "");
+		
+		bottomRightScoreboard = new Scoreboard(Scoreboard.BOTTOM_RIGHT, 256, 5);
+		bottomRightScoreboard.addWidget(status);
+		
+		statusIndex = 0;
+		
 		if(equipmentContainsRingDuelling())
 			ringDuellingCharges = getRingDuellingCharges();
+		
+		startingTime = System.currentTimeMillis();
+		
+		isScriptLoaded = true;
 		
 		return true;
 	}
@@ -146,6 +258,8 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 				
 				case running:
 					setRun(true);
+					if(!isRunning())
+						wait(random(1250, 1750));
 				break;
 				
 				case walkToBank:
@@ -172,13 +286,11 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 				
 				case storeCraftedRunes:
 					bank.deposit(lawRuneID, 0);
+					lawRunesAlreadyCounted = 0;
 					
 					setTimeout(3);
 					while(inventoryContains(lawRuneID) && !isTimedOut())
 						verbose("Waiting to store law runes...");
-					
-					if(getInventoryCount(lawRuneID) == 0)
-						lawRunesAlreadyCounted = 0;
 				break;
 				
 				case retrieveRing:
@@ -222,7 +334,7 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 				break;
 				
 				case walkToBalloon:
-					walkToClosestTile(cwlbPath);
+					walkPathMM(cwlbPath, 12);
 					wait(random(1250, 1750));
 				break;
 				
@@ -252,8 +364,13 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 					wait(random(1250, 1750));
 				break;
 				
+				case walkToMysteriousTile:
+					walkTo(mysteriousRuinsTile);
+					wait(random(1250, 1750));
+				break;
+				
 				case walkToRuins:
-					walkToClosestTile(lbmrPath);
+					walkPathMM(lbmrPath, 12);
 					wait(random(1250, 1750));
 				break;
 				
@@ -263,7 +380,7 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 				break;
 				
 				case walkToAlter:
-					walkToClosestTile(mrlaPath);
+					walkPathMM(mrlaPath, 12);
 					wait(random(1250, 1750));
 				break;
 				
@@ -290,9 +407,8 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 	public void serverMessageRecieved(ServerMessageEvent message) {
 		if(message.getMessage().contains("crumbles to dust")) {
 			ringDuellingCharges = 0;
-		} else if(message.getMessage().contains("You bind the temple's")) {
-			lawRunesCrafted += getInventoryCount(lawRuneID) - lawRunesAlreadyCounted;
-			lawRunesAlreadyCounted = getInventoryCount(lawRuneID);
+		} else if(message.getMessage().contains("bind")) {
+			lawRunesCrafted += getInventoryCount(true);
 		}
 			
 	}
@@ -303,13 +419,62 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 		
-		g.setColor(Color.GREEN);
-		g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
-		g.drawString("State: " + state.name(), 25, 25);
+		if(!isScriptLoaded) {
+			Scoreboard loadingBoard = new Scoreboard(Scoreboard.BOTTOM_RIGHT, 128, 5);
+			loadingBoard.addWidget(new ScoreboardWidget(timeImage, "Loading..."));
+			loadingBoard.drawScoreboard(g);
+
+			return ;
+		}
+		
+		//Draw Custom Mouse Cursor
+		g.drawImage(cursorImage, getMouseLocation().x - 16, getMouseLocation().y - 16, observer);
+		
+		//Draw Top Left Scoreboard
+		topLeftScoreboard.getWidget(runesCraftedIndex).setWidgetText(numberFormatter.format(lawRunesCrafted));
+		topLeftScoreboard.drawScoreboard(g);
+		
+		//Draw Top Right Scoreboard
+		topRightScoreboard.getWidget(currentRuntimeIndex).setWidgetText(millisToClock(System.currentTimeMillis() - startingTime));
+		topRightScoreboard.drawScoreboard(g);
+		
+		//Draw Scoreboards
+		bottomLeftScoreboard.drawScoreboard(g);
+		
+		//Draw Bottom Right Scoreboard
+		bottomRightScoreboard.getWidget(statusIndex).setWidgetText(stateConversion.get(state.name()));
+		bottomRightScoreboard.drawScoreboard(g);
 	}
 	
 	@Override
 	public void onFinish() {}
+	
+	/**
+	 * Formats millisecond time into HH:MM:SS
+	 *
+	 * @param milliseconds				milliseconds that should be converted into
+	 * 									the HH:MM:SS format
+	 * 									@see java.lang.System
+	 * @return							formatted HH:MM:SS string
+	 * @since 0.1
+	 */
+	private String millisToClock(long milliseconds) {
+		long seconds = (milliseconds / 1000), minutes = 0, hours = 0;
+
+		if (seconds >= 60) {
+			minutes = (seconds / 60);
+			seconds -= (minutes * 60);
+		}
+
+		if (minutes >= 60) {
+			hours = (minutes / 60);
+			minutes -= (hours * 60);
+		}
+
+		return (hours < 10 ? "0" + hours + ":" : hours + ":")
+				+ (minutes < 10 ? "0" + minutes + ":" : minutes + ":")
+				+ (seconds < 10 ? "0" + seconds : seconds);
+	}
 	
 	public boolean atRingDuelling(String action) {
 		if(equipmentContains(ringDueling8ID))
@@ -446,7 +611,11 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 			}
 		} else if(entranaArea.contains(getMyPlayer().getLocation())) {
 			if(Calculations.onScreen(mysteriousRuinsTile.getScreenLocation())) {
-				state = State.enterRuins;
+				if(mysteriousRuinsTile.distanceTo() > 4) {
+					state = State.walkToMysteriousTile;
+				} else {
+					state = State.enterRuins;
+				}
 			} else {
 				state = State.walkToRuins;
 			}
@@ -725,7 +894,7 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 		 */
 		public void drawWidget(Graphics2D g, int x, int y) {
 			g.setColor(Color.white);
-			g.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+			g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
 
 			g.drawImage(widgetImage, x, y, observer);
 			g.drawString(widgetText, x + widgetImage.getWidth(observer) + 4, y + 12);
