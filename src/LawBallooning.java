@@ -178,12 +178,12 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 		//Load Images
 		try {
 			cursorImage = ImageIO.read(new URL("http://scripts.allometry.com/app/webroot/img/cursors/cursor-01.png"));
-			lawRuneImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/information.png"));
+			lawRuneImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/law_rune.png"));
 			coinsImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/coins.png"));
 			coinsDeleteImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/coins_delete.png"));
 			coinsAddImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/coins_add.png"));
 			timeImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/time.png"));
-			lawRuneToGoImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/information.png"));
+			lawRuneToGoImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/law_rune_go.png"));
 			tagOrange = ImageIO.read(new URL("http://scripts.allometry.com/icons/tag_orange.png"));
 			sumImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/sum.png"));
 			arrowRotateClockwise = ImageIO.read(new URL("http://scripts.allometry.com/icons/arrow_rotate_clockwise.png"));
