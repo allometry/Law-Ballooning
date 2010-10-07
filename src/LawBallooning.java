@@ -32,11 +32,14 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 	private RSArea castleWarsArea = new RSArea(new RSTile(2430, 3073), new RSTile(2455, 3106));
 	private RSArea entranaArea = new RSArea(new RSTile(2802, 3329), new RSTile(2869, 3391));
 	
-	//Counters
+	//Counters and Integers
+	private float lawRuneXP = 9.5f;
+	private int lawRunesCrafted = 0;
 	private int ringDuellingCharges = 0;
-	private int lawRunesCrafted = 0, lawRunesAlreadyCounted = 0;
-	private long timeoutMillis;
+	private int startingLevel = 0;
+	private int startingXP = 0;
 	private long startingTime = 0;
+	private long timeoutMillis;
 	
 	//Flags
 	private boolean isVerbose = true;
@@ -49,7 +52,6 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 	private Image cursorImage;
 	private Image lawRuneImage, tagOrange, sumImage;
 	private Image timeImage, lawRuneToGoImage;
-	private Image coinsImage, coinsDeleteImage, coinsAddImage;
 	private Image arrowRotateClockwise;
 	
 	//Image Observers
@@ -67,7 +69,6 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 	//Inventory IDs
 	private int hugePouchID = -1, largePouchID = 5512, mediumPouchID = 5510, smallPouchID = 5509;
 	private int normalLogID = 1511;
-	private int lawTalismanID = 1458, lawTiaraID = 5545;
 	private int lawRuneID = 563, pureEssenceID = 7936;
 	private int ringDueling8ID = 2552, ringDueling7ID = 2554, ringDueling6ID = 2556, ringDueling5ID = 2558;
 	private int ringDueling4ID = 2560, ringDueling3ID = 2562, ringDueling2ID = 2564, ringDueling1ID = 2566;
@@ -85,18 +86,16 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 	private RSTile[] mrlaPath = {new RSTile(2464, 4819), new RSTile(2464, 4824), new RSTile(2464, 4828), new RSTile(2464, 4830)};
 	
 	//Scoreboard
-	private Scoreboard topLeftScoreboard, topRightScoreboard, bottomLeftScoreboard, bottomRightScoreboard;
+	private Scoreboard topLeftScoreboard, topRightScoreboard, bottomRightScoreboard;
 	
 	//Scoreboard Widgets
-	private ScoreboardWidget runesCrafted, currentNetProduct;
-	private ScoreboardWidget currentRuntime, currentLevel, runesToLevel, experiencedGained;
-	private ScoreboardWidget currentGrossProduct, currentGrossCost;
+	private ScoreboardWidget runesCrafted, runesToLevel;
+	private ScoreboardWidget currentRuntime, currentLevel, experiencedGained;
 	private ScoreboardWidget status;
 	
 	//Scoreboard Widget Indexes
-	private int runesCraftedIndex, currentNetProductIndex;
-	private int currentRuntimeIndex, currentLevelIndex, runesToLevelIndex, experiencedGainedIndex;
-	private int currentGrossProductIndex, currentGrossCostIndex;
+	private int runesCraftedIndex, runesToLevelIndex;
+	private int currentRuntimeIndex, currentLevelIndex, experiencedGainedIndex;
 	private int statusIndex;
 	
 	//States
@@ -179,9 +178,6 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 		try {
 			cursorImage = ImageIO.read(new URL("http://scripts.allometry.com/app/webroot/img/cursors/cursor-01.png"));
 			lawRuneImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/law_rune.png"));
-			coinsImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/coins.png"));
-			coinsDeleteImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/coins_delete.png"));
-			coinsAddImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/coins_add.png"));
 			timeImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/time.png"));
 			lawRuneToGoImage = ImageIO.read(new URL("http://scripts.allometry.com/icons/law_rune_go.png"));
 			tagOrange = ImageIO.read(new URL("http://scripts.allometry.com/icons/tag_orange.png"));
@@ -191,42 +187,28 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 		
 		//Top Left Scoreboard
 		runesCrafted = new ScoreboardWidget(lawRuneImage, "");
-		currentNetProduct = new ScoreboardWidget(coinsAddImage, "");
+		runesToLevel = new ScoreboardWidget(lawRuneToGoImage, "");
 		
 		topLeftScoreboard = new Scoreboard(Scoreboard.TOP_LEFT, 128, 5);
 		topLeftScoreboard.addWidget(runesCrafted);
-		topLeftScoreboard.addWidget(currentNetProduct);
+		topLeftScoreboard.addWidget(runesToLevel);
 		
 		runesCraftedIndex = 0;
-		currentNetProductIndex = 1;
+		runesToLevelIndex = 1;
 		
 		//Top Right Scoreboard
 		currentRuntime = new ScoreboardWidget(timeImage, "");
 		currentLevel = new ScoreboardWidget(tagOrange, "");
-		runesToLevel = new ScoreboardWidget(lawRuneToGoImage, "");
 		experiencedGained = new ScoreboardWidget(sumImage, "");
 		
 		topRightScoreboard = new Scoreboard(Scoreboard.TOP_RIGHT, 128, 5);
 		topRightScoreboard.addWidget(currentRuntime);
 		topRightScoreboard.addWidget(currentLevel);
-		topRightScoreboard.addWidget(runesToLevel);
 		topRightScoreboard.addWidget(experiencedGained);
 		
 		currentRuntimeIndex = 0;
 		currentLevelIndex = 1;
-		runesToLevelIndex = 2;
-		experiencedGainedIndex = 3;
-		
-		//Bottom Left Scoreboard
-		currentGrossProduct = new ScoreboardWidget(coinsImage, "");
-		currentGrossCost = new ScoreboardWidget(coinsDeleteImage, "");
-		
-		bottomLeftScoreboard = new Scoreboard(Scoreboard.BOTTOM_LEFT, 128, 5);
-		bottomLeftScoreboard.addWidget(currentGrossProduct);
-		bottomLeftScoreboard.addWidget(currentGrossCost);
-		
-		currentGrossProductIndex = 0;
-		currentGrossCostIndex = 1;
+		experiencedGainedIndex = 2;
 		
 		//Bottom Right Scoreboard
 		status = new ScoreboardWidget(arrowRotateClockwise, "");
@@ -239,7 +221,9 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 		if(equipmentContainsRingDuelling())
 			ringDuellingCharges = getRingDuellingCharges();
 		
+		startingLevel = skills.getCurrSkillLevel(STAT_RUNECRAFTING);
 		startingTime = System.currentTimeMillis();
+		startingXP = skills.getCurrentSkillExp(STAT_RUNECRAFTING);
 		
 		isScriptLoaded = true;
 		
@@ -286,7 +270,6 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 				
 				case storeCraftedRunes:
 					bank.deposit(lawRuneID, 0);
-					lawRunesAlreadyCounted = 0;
 					
 					setTimeout(3);
 					while(inventoryContains(lawRuneID) && !isTimedOut())
@@ -432,14 +415,14 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 		
 		//Draw Top Left Scoreboard
 		topLeftScoreboard.getWidget(runesCraftedIndex).setWidgetText(numberFormatter.format(lawRunesCrafted));
+		topLeftScoreboard.getWidget(runesToLevelIndex).setWidgetText("\u2248" + numberFormatter.format(Math.ceil(skills.getXPToNextLevel(STAT_RUNECRAFTING) / lawRuneXP)));
 		topLeftScoreboard.drawScoreboard(g);
 		
 		//Draw Top Right Scoreboard
 		topRightScoreboard.getWidget(currentRuntimeIndex).setWidgetText(millisToClock(System.currentTimeMillis() - startingTime));
+		topRightScoreboard.getWidget(currentLevelIndex).setWidgetText("" + skills.getCurrSkillLevel(STAT_RUNECRAFTING));
+		topRightScoreboard.getWidget(experiencedGainedIndex).setWidgetText(numberFormatter.format(skills.getCurrentSkillExp(STAT_RUNECRAFTING) - startingXP) + (((skills.getCurrSkillLevel(STAT_RUNECRAFTING) - startingLevel) == 0) ? "" : " (" + (skills.getCurrSkillLevel(STAT_RUNECRAFTING) - startingLevel) + ")"));
 		topRightScoreboard.drawScoreboard(g);
-		
-		//Draw Scoreboards
-		bottomLeftScoreboard.drawScoreboard(g);
 		
 		//Draw Bottom Right Scoreboard
 		bottomRightScoreboard.getWidget(statusIndex).setWidgetText(stateConversion.get(state.name()));
@@ -585,7 +568,7 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 					}
 				}
 				
-				if(inventoryEmptyExcept(hugePouchID, largePouchID, mediumPouchID, smallPouchID, lawTalismanID, normalLogID)) {
+				if(inventoryEmptyExcept(hugePouchID, largePouchID, mediumPouchID, smallPouchID, normalLogID)) {
 					if(bank.isOpen()) {
 						if(inventoryContains(normalLogID)) {
 							state = State.retrieveRuneEssence;
