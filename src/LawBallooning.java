@@ -4,17 +4,27 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.RenderingHints;
+import java.awt.geom.AffineTransform;
 import java.awt.geom.RoundRectangle2D;
+import java.awt.image.AffineTransformOp;
+import java.awt.image.BufferedImage;
 import java.awt.image.ImageObserver;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URL;
+import java.net.URLConnection;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 
 import javax.imageio.ImageIO;
 
+import org.rsbot.bot.input.CanvasWrapper;
 import org.rsbot.event.events.ServerMessageEvent;
 import org.rsbot.event.listeners.PaintListener;
 import org.rsbot.event.listeners.ServerMessageListener;
@@ -649,6 +659,99 @@ public class LawBallooning extends Script implements PaintListener, ServerMessag
 			} else {
 				state = State.running;
 			}
+		}
+	}
+	
+	/**
+	 * Binoculars is a class for remote control of this bot. It is for use with
+	 * the binoculars webapp on AlloNet.
+	 * 
+	 * @author allometry
+	 * @version 1.0
+	 * @since 1.0
+	 */
+	public class Binoculars {
+		private double thumbnailWidth = 320, thumbnailHeight = 240;
+		private String remoteKey = "ABCDEFG0123456789";
+		
+		public void Bionoculars(String remoteKey) {
+			this.remoteKey = remoteKey;
+		}
+		
+		public void tick() {
+			BufferedImage thumbnail = getThumbnailScreenCapture();
+			ByteArrayOutputStream ios = new ByteArrayOutputStream();
+			
+			try {
+				ImageIO.write(thumbnail, "jpg", ios);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}	
+		}
+		
+		public BufferedImage getThumbnailScreenCapture() {
+			BufferedImage rawScreenCapture = CanvasWrapper.getBotBuffer();
+			AffineTransform scaleTransformer = new AffineTransform();
+			
+			scaleTransformer.scale(thumbnailWidth, thumbnailHeight);
+			
+			AffineTransformOp scaleOperation = new AffineTransformOp(scaleTransformer, AffineTransformOp.TYPE_BILINEAR);
+			
+			return scaleOperation.filter(rawScreenCapture, null);
+		}
+	}
+	
+	public class SimpleHTTP {
+		private Random random = new Random();
+		private String boundary = "---------------------------" + randomString() + randomString() + randomString();
+		
+		protected Map cookies = null;
+		protected OutputStream streamToServer = null;
+		protected URLConnection server = null;
+		
+		public void simpleHTTP(URLConnection server) {
+			this.server = server;
+			server.setDoOutput(true);
+			server.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+		}
+		
+		protected void connect() throws IOException {
+			if(streamToServer == null)
+				streamToServer = server.getOutputStream();
+		}
+		
+		protected InputStream post(Map parameters) throws IOException {
+			write("--");
+			write(boundary);
+			write("--");
+			streamToServer.close();
+			return server.getInputStream();
+		}
+		
+		protected String randomString() {
+			return Long.toString(random.nextLong(), 36);
+		}
+		
+		protected void writeName(String name) throws IOException {
+			writeNewLine();
+		    write("Content-Disposition: form-data; name=\"");
+		    write(name);
+		    write('"');
+		}
+		
+		protected void writeNewLine() throws IOException {
+			connect();
+			write("\r\n");
+		}
+		
+		protected void write(char c) throws IOException {
+			connect();
+			streamToServer.write(c);
+		}
+		
+		protected void write(String s) throws IOException {
+			connect();
+			streamToServer.write(s.getBytes());
 		}
 	}
 	
